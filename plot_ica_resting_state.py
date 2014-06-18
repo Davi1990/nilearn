@@ -17,16 +17,16 @@ dataset = datasets.fetch_nyu_rest(n_subjects=1)
 ### Preprocess ################################################################
 from nilearn.input_data import NiftiMasker
 
+# This is resting-state data: the background has not been removed yet,
+# thus we need to use mask_strategy='epi' to compute the mask from the
+# EPI images
 masker = NiftiMasker(smoothing_fwhm=8, memory='nilearn_cache', memory_level=1,
-                        standardize=False)
+                     mask_strategy='epi', standardize=False)
 data_masked = masker.fit_transform(dataset.func[0])
 
 # Concatenate all the subjects
 #fmri_data = np.concatenate(data_masked, axis=1)
 fmri_data = data_masked
-
-# Take the mean along axis 3: the direction of time
-mean_img = masker.inverse_transform(fmri_data.mean(axis=0))
 
 
 ### Apply ICA #################################################################
@@ -52,6 +52,11 @@ components = np.ma.masked_equal(components, 0, copy=False)
 
 ### Visualize the results #####################################################
 # Show some interesting components
+
+# Use the mean as a background
+from nilearn import image
+mean_img = image.mean_img(dataset.func[0])
+
 mean_epi = mean_img.get_data()
 import matplotlib.pyplot as plt
 plt.figure()

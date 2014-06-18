@@ -3,16 +3,18 @@ Test the mask-extracting utilities.
 """
 import types
 import distutils.version
+import warnings
 import numpy as np
 
 from numpy.testing import assert_array_equal
-from nose.tools import assert_true, assert_false, assert_equal, assert_raises
+from nose.tools import assert_true, assert_false, assert_equal, \
+    assert_raises, assert_is_instance
 
 from nibabel import Nifti1Image
 
 from .. import masking
 from ..masking import compute_epi_mask, compute_multi_epi_mask, \
-    unmask, intersect_masks
+    compute_background_mask, unmask, intersect_masks, MaskWarning
 
 from .._utils.testing import write_tmp_imgs
 
@@ -23,8 +25,8 @@ np_version = distutils.version.LooseVersion(np_version).version
 
 def test_compute_epi_mask():
     mean_image = np.ones((9, 9, 3))
-    mean_image[3:-3, 3:-3, :] = 10
-    mean_image[5, 5, :] = 100
+    mean_image[3:-2, 3:-2, :] = 10
+    mean_image[5, 5, :] = 11
     mean_image = Nifti1Image(mean_image, np.eye(4))
     mask1 = compute_epi_mask(mean_image, opening=False)
     mask2 = compute_epi_mask(mean_image, exclude_zeros=True,
@@ -34,14 +36,16 @@ def test_compute_epi_mask():
     np.testing.assert_array_equal(mask1.get_data(), mask2.get_data())
     # Check that padding with zeros does not change the extracted mask
     mean_image2 = np.zeros((30, 30, 3))
-    mean_image2[:9, :9, :] = mean_image.get_data()
+    mean_image2[3:12, 3:12, :] = mean_image.get_data()
     mean_image2 = Nifti1Image(mean_image2, np.eye(4))
     mask3 = compute_epi_mask(mean_image2, exclude_zeros=True,
                              opening=False)
-    np.testing.assert_array_equal(mask1.get_data(), mask3.get_data()[:9, :9])
+    np.testing.assert_array_equal(mask1.get_data(),
+                                  mask3.get_data()[3:12, 3:12])
     # However, without exclude_zeros, it does
     mask3 = compute_epi_mask(mean_image2, opening=False)
-    assert_false(np.allclose(mask1.get_data(), mask3.get_data()[:9, :9]))
+    assert_false(np.allclose(mask1.get_data(),
+                             mask3.get_data()[3:12, 3:12]))
 
     # Check that we get a ValueError for incorrect shape
     mean_image = np.ones((9, 9))
@@ -50,54 +54,42 @@ def test_compute_epi_mask():
     mean_image = Nifti1Image(mean_image, np.eye(4))
     assert_raises(ValueError, compute_epi_mask, mean_image)
 
+    # Check that we get a useful warning for empty masks
+    mean_image = np.zeros((9, 9, 9))
+    mean_image[0, 0, 1] = -1
+    mean_image[0, 0, 0] = 1.2
+    mean_image[0, 0, 2] = 1.1
+    mean_image = Nifti1Image(mean_image, np.eye(4))
+    with warnings.catch_warnings(True) as w:
+        compute_epi_mask(mean_image, exclude_zeros=True)
+    assert_equal(len(w), 1)
+    assert_is_instance(w[0].message, masking.MaskWarning)
 
-def test__smooth_array():
-    """Test smoothing of images: _smooth_array()"""
-    # Impulse in 3D
-    data = np.zeros((40, 41, 42))
-    data[20, 20, 20] = 1
 
-    # fwhm divided by any test affine must be odd. Otherwise assertion below
-    # will fail. ( 9 / 0.6 = 15 is fine)
-    fwhm = 9
-    test_affines = (np.eye(4), np.diag((1, 1, -1, 1)),
-                    np.diag((.6, 1, .6, 1)))
-    for affine in test_affines:
-        filtered = masking._smooth_array(data, affine,
-                                         fwhm=fwhm, copy=True)
-        assert_false(np.may_share_memory(filtered, data))
+def test_compute_background_mask():
+    for value in (0, np.nan):
+        mean_image = value * np.ones((9, 9, 9))
+        mean_image[3:-3, 3:-3, 3:-3] = 1
+        mask = mean_image == 1
+        mean_image = Nifti1Image(mean_image, np.eye(4))
+        mask1 = compute_background_mask(mean_image, opening=False)
+        np.testing.assert_array_equal(mask1.get_data(),
+                                      mask.astype(np.int8))
 
-        # We are expecting a full-width at half maximum of
-        # fwhm / voxel_size:
-        vmax = filtered.max()
-        above_half_max = filtered > .5 * vmax
-        for axis in (0, 1, 2):
-            proj = np.any(np.any(np.rollaxis(above_half_max,
-                          axis=axis), axis=-1), axis=-1)
-            np.testing.assert_equal(proj.sum(),
-                                    fwhm / np.abs(affine[axis, axis]))
+    # Check that we get a ValueError for incorrect shape
+    mean_image = np.ones((9, 9))
+    mean_image[3:-3, 3:-3] = 10
+    mean_image[5, 5] = 100
+    mean_image = Nifti1Image(mean_image, np.eye(4))
+    assert_raises(ValueError, compute_background_mask, mean_image)
 
-    # Check that NaNs in the data do not propagate
-    data[10, 10, 10] = np.NaN
-    filtered = masking._smooth_array(data, affine, fwhm=fwhm,
-                                   ensure_finite=True, copy=True)
-    assert_true(np.all(np.isfinite(filtered)))
-
-    # Check copy=False.
-    for affine in test_affines:
-        data = np.zeros((40, 41, 42))
-        data[20, 20, 20] = 1
-        masking._smooth_array(data, affine, fwhm=fwhm, copy=False)
-
-        # We are expecting a full-width at half maximum of
-        # fwhm / voxel_size:
-        vmax = data.max()
-        above_half_max = data > .5 * vmax
-        for axis in (0, 1, 2):
-            proj = np.any(np.any(np.rollaxis(above_half_max,
-                          axis=axis), axis=-1), axis=-1)
-            np.testing.assert_equal(proj.sum(),
-                                    fwhm / np.abs(affine[axis, axis]))
+    # Check that we get a useful warning for empty masks
+    mean_image = np.zeros((9, 9, 9))
+    mean_image = Nifti1Image(mean_image, np.eye(4))
+    with warnings.catch_warnings(True) as w:
+        compute_background_mask(mean_image)
+    assert_equal(len(w), 1)
+    assert_is_instance(w[0].message, masking.MaskWarning)
 
 
 def test_apply_mask():
@@ -319,7 +311,10 @@ def test_compute_multi_epi_mask():
     mask_b[2:6, 2:6] = 1
     mask_b_img = Nifti1Image(mask_b.astype(int), np.eye(4) / 2.)
 
-    assert_raises(ValueError, compute_multi_epi_mask, [mask_a_img, mask_b_img])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", MaskWarning)
+        assert_raises(ValueError, compute_multi_epi_mask,
+                      [mask_a_img, mask_b_img])
     mask_ab = np.zeros((4, 4, 1), dtype=np.bool)
     mask_ab[2, 2] = 1
     mask_ab_ = compute_multi_epi_mask([mask_a_img, mask_b_img], threshold=1.,
@@ -327,3 +322,25 @@ def test_compute_multi_epi_mask():
                                       target_affine=np.eye(4),
                                       target_shape=(4, 4, 1))
     assert_array_equal(mask_ab, mask_ab_.get_data())
+
+
+def test_warning_shape(random_state=42, shape=(3, 5, 7, 11)):
+    # open-ended `if .. elif` in masking.unmask
+
+    rng = np.random.RandomState(random_state)
+
+    # setup
+    X = rng.randn()
+    mask_img = np.zeros(shape, dtype=np.uint8)
+    mask_img[rng.randn(*shape) > .4] = 1
+    n_features = (mask_img > 0).sum()
+    mask_img = Nifti1Image(mask_img, np.eye(4))
+    n_samples = shape[0]
+
+    X = rng.randn(n_samples, n_features, 2)
+    # 3D X (unmask should raise a TypeError)
+    assert_raises(TypeError, unmask, X, mask_img)
+
+    X = rng.randn(n_samples, n_features)
+    # 2D X (should be ok)
+    unmask(X, mask_img)

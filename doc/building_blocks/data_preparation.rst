@@ -46,28 +46,28 @@ preprocessings and validate them.
 In addition, :class:`NiftiMasker` is a `scikit-learn
 <http://scikit-learn.org>`_ compliant
 transformer so that you can directly plug it into a `scikit-learn
-<http://scikit-learn.org>`_ pipeline.
+pipeline <http://scikit-learn.org/stable/modules/pipeline.html>`_.
 
 Custom data loading
 --------------------
 
-Sometimes, some custom preprocessing of data is necessary. In this
-example, we will restrict Haxby dataset (which contains 1452 frames)
-to 150 frames to speed up computation. To do that, we load the dataset
-with :func:`fetch_haxby_simple() <nilearn.datasets.fetch_haxby_simple>`,
-restrict it to 150 frames and build a brand new Nifti-like object to
-give it to the masker. Though it is possible, there is no need to save
-your data in a file to pass it to a :class:`NiftiMasker`. Simply use
-`nibabel <http://nipy.sourceforge.net/nibabel/>`_ to create a
-:ref:`Niimg <niimg>` in memory:
+Sometimes, some custom preprocessing of data is necessary. For instance
+we can restrict a dataset to the first 100 frames. Below, we load
+a resting-state dataset with :func:`fetch_fetch_nyu_rest()
+<nilearn.datasets.fetch_nyu_rest>`, restrict it to 100 frames and
+build a brand new Nifti-like object to give it to the masker. Though it
+is possible, there is no need to save your data in a file to pass it to a
+:class:`NiftiMasker`. Simply use `nibabel
+<http://nipy.sourceforge.net/nibabel/>`_ to create a :ref:`Niimg <niimg>`
+in memory:
 
 
-.. literalinclude:: ../../plot_nifti_advanced.py
-    :start-after: from nilearn import datasets
-    :end-before: # Display helper
+.. literalinclude:: ../../plot_mask_computation.py
+    :start-after: Load NYU resting-state dataset
+    :end-before: # To display the background
 
-Custom Masking
----------------
+Controlling how the mask is computed from the data
+-----------------------------------------------------
 
 In the basic tutorial, we showed how the masker could compute a mask
 automatically, and it has done a good job. But, on some datasets, the
@@ -78,13 +78,13 @@ Mask Visualization
 ...................
 
 Before exploring the subject, we define a helper function to display
-masks. This function will display a background (composed of a mean of
-epi scans) and a mask as a red layer over this background.
+masks. This function will display a background (we can use the mean of
+the input images) and a mask as a red layer over this background.
 
 
-.. literalinclude:: ../../plot_nifti_advanced.py
-    :start-after: haxby_img = nibabel.Nifti1Image(haxby_func, haxby_img.get_affine())
-    :end-before: # Generate mask with default parameters
+.. literalinclude:: ../../plot_mask_computation.py
+    :start-after: # Simple visualization helper
+    :end-before: ###############################################################################
 
 
 Computing the mask
@@ -100,61 +100,70 @@ As an example, we will now try to build a mask based on a dataset from
 scratch. The Haxby dataset will be used since it provides a mask that we
 can use as a reference.
 
-.. figure:: ../auto_examples/images/plot_nifti_advanced_1.png
-    :target: auto_examples/plot_nifti_advanced.html
+.. figure:: ../auto_examples/images/plot_mask_computation_2.png
+    :target: auto_examples/plot_mask_computation.html
     :align: right
     :scale: 50%
 
 The first step is to generate a mask with default parameters and take
-a look at it. As an indicator, we can, for example, compare the mask
-to original data.
+a look at it. 
 
-.. literalinclude:: ../../plot_nifti_advanced.py
-    :start-after: # Generate mask with default parameters
-    :end-before: # Generate mask with opening
+.. literalinclude:: ../../plot_mask_computation.py
+    :start-after: # Simple mask extraction from EPI images
+    :end-before: # Generate mask with strong opening
 
-With naked eyes, we can see that the outline of the mask is not very
-smooth. To make it less smooth, bypass the opening step
-(*mask_opening=0*).
+____
 
-.. figure:: ../auto_examples/images/plot_nifti_advanced_2.png
-    :target: auto_examples/plot_nifti_advanced.html
+.. figure:: ../auto_examples/images/plot_mask_computation_3.png
+    :target: auto_examples/plot_mask_computation.html
     :align: right
     :scale: 50%
 
-.. literalinclude:: ../../plot_nifti_advanced.py
-    :start-after: # Generate mask with opening
-    :end-before: # Generate mask with upper cutoff
+We can make the outline of the mask more by increasing the number of
+opening steps (*opening=10*) using the `mask_args` argument of the
+:class:`NiftiMasker`.
 
-Looking at the :class:`NiftiMasker` object, we
-see two interesting parameters: *lower_cutoff* and *upper_cutoff*. The
-algorithm ignores dark (low) values. We can tell the algorithm to ignore
-high values by lowering *upper cutoff*. Default value is 0.9, so we try
-0.8 to lower a bit the threshold and get a larger mask.
+.. literalinclude:: ../../plot_mask_computation.py
+    :start-after: # Generate mask with strong opening
+    :end-before: # Generate mask with a high lower cutoff
 
+____
 
-.. literalinclude:: ../../plot_nifti_advanced.py
-    :start-after: # Generate mask with upper cutoff
-    :end-before: # trended vs detrended
+Looking at the :func:`nilearn.masking.compute_epi_mask` called by the
+:class:`NiftiMasker` object, we see two interesting parameters:
+*lower_cutoff* and *upper_cutoff*. These set the grey-values bounds in
+which the masking algorithm is going to try to find it's threshold (where
+0 is the minimum of the image, and 1 the maximum). Here we raise a lot
+the lower cutoff, and thus force the masking algorithm to select only
+voxels that are very light on the EPI image.
 
-.. figure:: ../auto_examples/images/plot_nifti_advanced_3.png
-    :target: ../auto_examples/plot_nifti_advanced.html
-    :align: center
+.. figure:: ../auto_examples/images/plot_mask_computation_4.png
+    :target: ../auto_examples/plot_mask_computation.html
+    :align: right
     :scale: 50%
 
-The resulting mask seems to be correct. Compared to the original one,
-it is very close.
+
+.. literalinclude:: ../../plot_mask_computation.py
+    :start-after: # Generate mask with a high lower cutoff
+    :end-before: ################################################################################
+
 
 .. note::
 
     The full example described in this section can be found here:
-    :doc:`plot_nifti_advanced.py <../auto_examples/plot_nifti_advanced>`.
+    :doc:`plot_mask_computation.py <../auto_examples/plot_mask_computation>`.
     This one can be relevant too:
     :doc:`plot_nifti_simple.py <../auto_examples/plot_nifti_simple>`.
 
 
-Preprocessing
--------------
+Common data preparation steps: resampling, smoothing, filtering
+----------------------------------------------------------------
+
+.. seealso::
+
+   If you don't want to use the :class:`NiftiMasker` to perform these
+   simple operations on data, note that they are 
+   :ref:`corresponding functions <preprocessing_functions>`.
 
 .. _resampling:
 
@@ -173,6 +182,35 @@ Resampling can be used for example to reduce processing time by
 lowering image resolution. Certain image viewers also require images to be
 resampled to display overlays.
 
+Automatic compution of offset and bounding box can be performed by
+specifying a 3x3 matrix instead of the 4x4 affine, in which case nilearn
+computes automatically the translation part of the affine.
+
+.. image:: ../auto_examples/images/plot_affine_transformation_2.png
+    :target: auto_examples/plot_affine_transformation.html
+    :scale: 36%
+.. image:: ../auto_examples/images/plot_affine_transformation_4.png
+    :target: auto_examples/plot_affine_transformation.html
+    :scale: 36%
+.. image:: ../auto_examples/images/plot_affine_transformation_3.png
+    :target: auto_examples/plot_affine_transformation.html
+    :scale: 36%
+
+
+.. topic:: **Special case: resampling to a given voxel size**
+
+   Specifying a 3x3 matrix that is diagonal as a target_affine fixes the
+   voxel size. For instance to resample to 3x3x3 mm voxels::
+
+    >>> import numpy as np
+    >>> target_affine = np.diag((3, 3, 3))
+
+|
+
+.. seealso::
+
+   :func:`nilearn.image.resample_img`
+
 
 Smoothing
 .........
@@ -183,6 +221,10 @@ half maximum (in millimeter) along each axis in the parameter `smoothing_fwhm`.
 For an isotropic filtering, passing a scalar is also possible. The underlying
 function handles properly the tricky case of non-cubic voxels, by scaling the
 given widths appropriately.
+
+.. seealso::
+
+   :func:`nilearn.image.smooth_img`
 
 
 .. _temporal_filtering:
@@ -208,22 +250,28 @@ All previous filters operate on images, before conversion to voxel signals.
 .. topic:: **Exercise**
 
    You can, more as a training than as an exercise, try to play with
-   the parameters in :doc:`plot_haxby_simple.py
+   the parameters in :ref:`plot_haxby_simple.py
    <auto_examples/plot_haxby_simple>`. Try to enable detrending
    and run the script: does it have a big impact on the result?
+
+
+.. seealso::
+
+   :func:`nilearn.signal.clean`
 
 
 Inverse transform: unmasking data
 ----------------------------------
 
-Once voxel signals have been processed, the result can be visualized as images
-after unmasking (turning voxel signals into a series of images, using the same
-mask as for masking). This step is present in almost all the
-:doc:`examples <auto_examples/index>` provided in Nilearn.
+Once voxel signals have been processed, the result can be visualized as
+images after unmasking (turning voxel signals into a series of images,
+using the same mask as for masking). This step is present in almost all
+the :ref:`examples <examples-index>` provided in Nilearn. Below is
+an excerpt of :ref:`the example performing Anova-SVM on the Haxby data
+<example_plot_haxby_anova_svm.py>`):
 
-
-.. literalinclude:: ../../plot_haxby_decoding.py
-    :start-after: ### Look at the discriminating weights
+.. literalinclude:: ../../plot_haxby_anova_svm.py
+    :start-after: ### Look at the SVC's discriminating weights
     :end-before: # We use a masked array so that the voxels at '-1' are displayed
 
 
@@ -321,8 +369,8 @@ algorithm:
    :end-before: print("-- Displaying results")
 
 
-NiftiLabelsMasker Usage
------------------------
+:class:`NiftiLabelsMasker` Usage
+---------------------------------
 
 Usage of :class:`NiftiLabelsMasker` is similar to that of
 :class:`NiftiMapsMasker`. The main difference is that it requires a labels image

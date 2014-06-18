@@ -14,7 +14,7 @@ manipulation them.
 
 
 
-.. _downloading_data:
+.. _loading_data:
 
 Loading data
 ============
@@ -224,14 +224,14 @@ can be easily extracted from the fMRI data using the
 
    compute_epi_mask
 
+.. figure:: ../auto_examples/images/plot_visualization_2.png
+    :target: ../auto_examples/plot_visualization.html
+    :align: right
+    :scale: 50%
+
 .. literalinclude:: ../../plot_visualization.py
      :start-after: ### Extracting a brain mask ###################################################
      :end-before: ### Applying the mask #########################################################
-
-.. figure:: ../auto_examples/images/plot_visualization_2.png
-    :target: ../auto_examples/plot_visualization.html
-    :align: center
-    :scale: 50%
 
 .. _mask_4d_2_3d:
 
@@ -263,7 +263,7 @@ array to a 2D array, `voxel` **x** `time`, as depicted below:
 Functions for data preparation steps
 =====================================
 
-.. currentmodule:: nilearn.input_data.nifti_masker
+.. currentmodule:: nilearn.input_data
 
 The :class:`NiftiMasker` automatically does some important data preparion
 steps. These steps are also available as simple functions if you want to
@@ -271,12 +271,20 @@ set up your own data preparation procedure:
 
 .. currentmodule:: nilearn
 
-* Resampling: :func:`nilearn.image.resample_img`
+* Resampling: :func:`nilearn.image.resample_img`. See the example
+  :ref:`example_plot_affine_transformation.py` to
+  see the effect of affine transforms on data and bounding boxes.
+* Computing the mean of images (in the time of 4th direction):
+  :func:`nilearn.image.mean_img`
 * Smoothing: :func:`nilearn.image.smooth_img`
 * Masking:
 
-  * compute: :func:`nilearn.masking.compute_epi_mask`
-  * compute for multiple sessions/subjects: :func:`nilearn.masking.compute_multi_epi_mask`
+  * compute from EPI images: :func:`nilearn.masking.compute_epi_mask`
+  * compute from images with a flat background:
+    :func:`nilearn.masking.compute_background_mask`
+  * compute for multiple sessions/subjects:
+    :func:`nilearn.masking.compute_multi_epi_mask`
+    :func:`nilearn.masking.compute_multi_background_mask`
   * apply: :func:`nilearn.masking.apply_mask`
   * intersect several masks (useful for multi sessions/subjects): :func:`nilearn.masking.intersect_masks`
   * unmasking: :func:`nilearn.masking.unmask`
@@ -319,7 +327,7 @@ Functional MRI data are high dimensional comparend to the number of samples
 algorithm can perform poorly. However, a simple statistical test can help
 reducing the number of voxels.
 
-The Student's t-test performs a simple statistical test that determines if two
+The Student's t-test (:func:`scipy.stats.ttest_ind`) performs a simple statistical test that determines if two
 distributions are statistically different. It can be used to compare voxel
 timeseries in two different conditions (when houses or faces are shown in our
 case). If the timeserie distribution is similar in the two conditions, then the
@@ -363,8 +371,9 @@ Mask intersection
 We now want to restrict our study to the ventral temporal area. The
 corresponding mask is provided in `haxby.mask_vt`. We want to compute the
 intersection of this mask with our mask. The first step is to load it with
-nibabel. We then use a logical and to keep only voxels that are selected in both
-masks.
+nibabel's :func:`nibabel.load`. We then use a logical "and"
+-- :func:`numpy.logical_and` -- to keep only voxels 
+that are selected in both masks.
 
 .. literalinclude:: ../../plot_roi_extraction.py
     :start-after: # Binarization and intersection with VT mask

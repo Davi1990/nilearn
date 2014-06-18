@@ -44,8 +44,7 @@ def test_with_files():
     data[20, 20, 20] = 1
     data_img = Nifti1Image(data, np.eye(4))
 
-    with testing.write_tmp_imgs(data_img, create_files=True)\
-                as filename:
+    with testing.write_tmp_imgs(data_img) as filename:
         masker = NiftiMasker()
         masker.fit(filename)
         masker.transform(filename)
@@ -61,7 +60,7 @@ def test_nan():
     data[:, :, -1] = np.nan
     data[3:-3, 3:-3, 3:-3] = 10
     img = Nifti1Image(data, np.eye(4))
-    masker = NiftiMasker(mask_opening=0)
+    masker = NiftiMasker(mask_args=dict(opening=0))
     masker.fit(img)
     mask = masker.mask_img_.get_data()
     assert_true(mask[1:-1, 1:-1, 1:-1].all())

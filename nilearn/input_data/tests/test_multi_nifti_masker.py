@@ -22,7 +22,7 @@ def test_auto_mask():
     data = np.zeros((9, 9, 9))
     data[2:-2, 2:-2, 2:-2] = 10
     img = Nifti1Image(data, np.eye(4))
-    masker = MultiNiftiMasker(mask_opening=0)
+    masker = MultiNiftiMasker(mask_args=dict(opening=0))
     # Check that if we have not fit the masker we get a intelligible
     # error
     assert_raises(ValueError, masker.transform, [[img, ]])
@@ -55,7 +55,7 @@ def test_nan():
     data[:, :, -1] = np.nan
     data[3:-3, 3:-3, 3:-3] = 10
     img = Nifti1Image(data, np.eye(4))
-    masker = MultiNiftiMasker(mask_opening=0)
+    masker = MultiNiftiMasker(mask_args=dict(opening=0))
     masker.fit([img])
     mask = masker.mask_img_.get_data()
     assert_true(mask[1:-1, 1:-1, 1:-1].all())
@@ -65,6 +65,20 @@ def test_nan():
     assert_false(mask[-1].any())
     assert_false(mask[:, -1].any())
     assert_false(mask[:, :, -1].any())
+
+
+def test_different_affines():
+    # Mask and EIP files with different affines
+    mask_img = Nifti1Image(np.ones((2, 2, 2), dtype=np.int8),
+                           affine=np.diag((4, 4, 4, 1)))
+    epi_img1 = Nifti1Image(np.ones((4, 4, 4, 3)),
+                           affine=np.diag((2, 2, 2, 1)))
+    epi_img2 = Nifti1Image(np.ones((3, 3, 3, 3)),
+                           affine=np.diag((3, 3, 3, 1)))
+    masker = MultiNiftiMasker(mask=mask_img)
+    epis = masker.fit_transform([epi_img1, epi_img2])
+    for this_epi in epis:
+        masker.inverse_transform(this_epi)
 
 
 def test_joblib_cache():

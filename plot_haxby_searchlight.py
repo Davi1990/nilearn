@@ -38,8 +38,9 @@ mask_img = nibabel.load(dataset_files.mask)
 
 # .astype() makes a copy.
 process_mask = mask_img.get_data().astype(np.int)
-process_mask[..., 38:] = 0
-process_mask[..., :36] = 0
+picked_slice = 27
+process_mask[..., (picked_slice + 1):] = 0
+process_mask[..., :picked_slice] = 0
 process_mask[:, 30:] = 0
 process_mask_img = nibabel.Nifti1Image(process_mask, mask_img.get_affine())
 
@@ -61,15 +62,17 @@ import nilearn.decoding
 # The radius is the one of the Searchlight sphere that will scan the volume
 searchlight = nilearn.decoding.SearchLight(mask_img,
                                       process_mask_img=process_mask_img,
-                                      radius=5.6, n_jobs=n_jobs,
+                                      radius=5.6, n_jobs=1,
                                       verbose=1, cv=cv)
 searchlight.fit(fmri_img, y)
 
 ### F-scores computation ######################################################
 from nilearn.input_data import NiftiMasker
 
+# For decoding, standardizing is often very important
 nifti_masker = NiftiMasker(mask=mask_img, sessions=session,
-                           memory='nilearn_cache', memory_level=1)
+                           standardize=True, memory='nilearn_cache',
+                           memory_level=1)
 fmri_masked = nifti_masker.fit_transform(fmri_img)
 
 from sklearn.feature_selection import f_classif
@@ -83,15 +86,16 @@ p_unmasked = nifti_masker.inverse_transform(p_values).get_data()
 import matplotlib.pyplot as plt
 
 # Use the fmri mean image as a surrogate of anatomical data
-mean_fmri = fmri_img.get_data().mean(axis=-1)
+from nilearn import image
+mean_fmri = image.mean_img(fmri_img).get_data()
 
-# Searchlight results
+### Searchlight results
 plt.figure(1)
 # searchlight.scores_ contains per voxel cross validation scores
 s_scores = np.ma.array(searchlight.scores_, mask=np.logical_not(process_mask))
-plt.imshow(np.rot90(mean_fmri[..., 37]), interpolation='nearest',
+plt.imshow(np.rot90(mean_fmri[..., picked_slice]), interpolation='nearest',
           cmap=plt.cm.gray)
-plt.imshow(np.rot90(s_scores[..., 37]), interpolation='nearest',
+plt.imshow(np.rot90(s_scores[..., picked_slice]), interpolation='nearest',
           cmap=plt.cm.hot, vmax=1)
 plt.axis('off')
 plt.title('Searchlight')
@@ -99,9 +103,9 @@ plt.title('Searchlight')
 ### F_score results
 plt.figure(2)
 p_ma = np.ma.array(p_unmasked, mask=np.logical_not(process_mask))
-plt.imshow(np.rot90(mean_fmri[..., 37]), interpolation='nearest',
+plt.imshow(np.rot90(mean_fmri[..., picked_slice]), interpolation='nearest',
           cmap=plt.cm.gray)
-plt.imshow(np.rot90(p_ma[..., 37]), interpolation='nearest',
+plt.imshow(np.rot90(p_ma[..., picked_slice]), interpolation='nearest',
           cmap=plt.cm.hot)
 plt.title('F-scores')
 plt.axis('off')

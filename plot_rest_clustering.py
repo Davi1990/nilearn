@@ -19,8 +19,13 @@ Pattern Recognition 2011.
 import numpy as np
 from nilearn import datasets, input_data
 dataset = datasets.fetch_nyu_rest(n_subjects=1)
-nifti_masker = input_data.NiftiMasker(memory='nilearn_cache', memory_level=1,
-                              standardize=False)
+
+# This is resting-state data: the background has not been removed yet,
+# thus we need to use mask_strategy='epi' to compute the mask from the
+# EPI images
+nifti_masker = input_data.NiftiMasker(memory='nilearn_cache',
+                            mask_strategy='epi', memory_level=1,
+                            standardize=False)
 fmri_masked = nifti_masker.fit_transform(dataset.func[0])
 mask = nifti_masker.mask_img_.get_data().astype(np.bool)
 
@@ -54,7 +59,13 @@ print "Ward agglomeration 2000 clusters: %.2fs" % (time.time() - start)
 # Unmask data
 # Avoid 0 label
 labels = ward.labels_ + 1
-labels = nifti_masker.inverse_transform(labels).get_data()
+labels_img = nifti_masker.inverse_transform(labels)
+# labels_img is a Nifti1Image object, it can be saved to file with the
+# following code:
+labels_img.to_filename('parcellation.nii')
+
+# Retrieve the matrix data behind it
+labels = labels_img.get_data()
 # 0 is the background, putting it to -1
 labels = labels - 1
 
